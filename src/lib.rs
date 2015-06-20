@@ -1,6 +1,8 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::mem;
+use std::thread;
 
 pub struct RehashingHashMap<K, V> {
     // NOTE: I tried to make an array of 2 elements, but run into borrowing problems
@@ -11,7 +13,7 @@ pub struct RehashingHashMap<K, V> {
 }
 
 impl<K, V> RehashingHashMap<K, V>
-    where K: Eq + Hash + Clone
+    where K: Eq + Hash + Clone + Send, V:Send
 {
     pub fn new() -> RehashingHashMap<K, V> {
         RehashingHashMap {
@@ -41,6 +43,10 @@ impl<K, V> RehashingHashMap<K, V>
 
     fn get_secondary(&self) -> &HashMap<K, V> {
         if self.is1main { &self.hashmap2 } else { &self.hashmap1 }
+    }
+
+    fn get_mut_secondary(&mut self) -> &mut HashMap<K, V> {
+        if self.is1main { &mut self.hashmap2 } else { &mut self.hashmap1 }
     }
 
     fn rehash(&mut self) {
@@ -98,11 +104,12 @@ impl<K, V> RehashingHashMap<K, V>
 
     fn drop_secondary(&mut self) {
         self.rehashing = false;
-        if self.is1main {
-            self.hashmap2 = HashMap::new();
+        let hashmap:HashMap<K, V> = if self.is1main {
+            mem::replace(&mut self.hashmap2, HashMap::new())
         } else {
-            self.hashmap1 = HashMap::new();
-        }
+            mem::replace(&mut self.hashmap1, HashMap::new())
+        };
+        thread::spawn(move || drop(hashmap));
     }
 
     fn assert_state(&self) {
@@ -116,6 +123,7 @@ impl<K, V> RehashingHashMap<K, V>
 
     pub fn clear(&mut self) {
         self.get_mut_main().clear();
+        self.get_mut_secondary().clear();
         self.drop_secondary();
     }
 
