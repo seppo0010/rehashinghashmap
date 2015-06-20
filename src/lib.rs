@@ -45,18 +45,17 @@ impl<K, V> RehashingHashMap<K, V>
 
     fn rehash(&mut self) {
         if self.rehashing {
+            if self.get_secondary().len() == 0 {
+                self.drop_secondary();
+                return;
+            }
             let (mut main, mut sec) = if self.is1main {
                 (&mut self.hashmap1, &mut self.hashmap2)
             } else {
                 (&mut self.hashmap2, &mut self.hashmap1)
             };
-            let k: K = match sec.keys().take(1).next() {
-                Some(k) => k.clone(),
-                None => {
-                    self.rehashing = false;
-                    return;
-                }
-            };
+            // unwrap is safe, checked len() > 0 already
+            let k: K = sec.keys().take(1).next().unwrap().clone();
             // FIXME: I wish I did not have to clone they key
             // unwrap is safe, we know the key exists in the hashmap
             let val = sec.remove(&k).unwrap();
@@ -91,6 +90,33 @@ impl<K, V> RehashingHashMap<K, V>
 
     pub fn len(&self) -> usize {
         self.get_main().len() + self.get_secondary().len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.get_main().is_empty() && self.get_secondary().is_empty()
+    }
+
+    fn drop_secondary(&mut self) {
+        self.rehashing = false;
+        if self.is1main {
+            self.hashmap2 = HashMap::new();
+        } else {
+            self.hashmap1 = HashMap::new();
+        }
+    }
+
+    fn assert_state(&self) {
+        #![allow(dead_code)]
+        if self.rehashing {
+            assert!(self.get_secondary().capacity() > 0);
+        } else {
+            assert!(self.get_secondary().capacity() == 0);
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.get_mut_main().clear();
+        self.drop_secondary();
     }
 
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
@@ -142,6 +168,7 @@ fn insert() {
     assert!(hash.is_rehashing());
     assert_eq!(hash.insert(key.clone(), value1.clone()), Some(value2.clone()));
     assert!(!hash.is_rehashing());
+    hash.assert_state();
 }
 
 #[test]
@@ -172,6 +199,7 @@ fn insert_many_rehash_get() {
         hash.rehash();
     }
     assert!(!hash.is_rehashing());
+    hash.assert_state();
 
     assert_eq!(hash.len(), len);
 
@@ -181,4 +209,34 @@ fn insert_many_rehash_get() {
     for i in len..(len * 2) {
         assert!(hash.get(&i).is_none());
     }
+}
+
+#[test]
+fn is_empty() {
+    let mut hash = RehashingHashMap::new();
+    assert!(hash.is_empty());
+
+    let key = 0;
+    let value = 2;
+    assert_eq!(hash.insert(key.clone(), value.clone()), None);
+    assert!(!hash.is_empty());
+    hash.shrink_to_fit();
+    assert!(hash.is_rehashing());
+    assert!(!hash.is_empty());
+    hash.rehash();
+    hash.rehash();
+    assert!(!hash.is_rehashing());
+    assert!(!hash.is_empty());
+}
+
+#[test]
+fn clear() {
+    let mut hash = RehashingHashMap::with_capacity(1000);
+    let key = 0;
+    let value = 2;
+    assert_eq!(hash.insert(key.clone(), value.clone()), None);
+    hash.clear();
+    hash.assert_state();
+
+    assert!(hash.capacity() >= 1000);
 }
