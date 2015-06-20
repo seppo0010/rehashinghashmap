@@ -1,5 +1,6 @@
-use std::hash::Hash;
+use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::hash::Hash;
 
 pub struct RehashingHashMap<K, V> {
     // NOTE: I tried to make an array of 2 elements, but run into borrowing problems
@@ -106,6 +107,18 @@ impl<K, V> RehashingHashMap<K, V>
         self.rehash();
         ret
     }
+
+    pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<&V>
+            where K: Borrow<Q>, Q: Hash + Eq {
+        if self.rehashing {
+            match self.get_main().get(k) {
+                Some(ref v) => Some(v),
+                None => self.get_secondary().get(k),
+            }
+        } else {
+            self.get_main().get(k)
+        }
+    }
 }
 
 #[test]
@@ -129,4 +142,43 @@ fn insert() {
     assert!(hash.is_rehashing());
     assert_eq!(hash.insert(key.clone(), value1.clone()), Some(value2.clone()));
     assert!(!hash.is_rehashing());
+}
+
+#[test]
+fn insert_many_rehash_get() {
+    let mut hash = RehashingHashMap::new();
+
+    let len = 1000;
+
+    for i in 0..len {
+        hash.insert(i.clone(), i.clone());
+    }
+    hash.shrink_to_fit();
+    for _ in 0..(len / 2){
+        hash.rehash();
+    }
+    assert!(hash.is_rehashing());
+
+    assert_eq!(hash.len(), len);
+
+    for i in 0..len {
+        assert_eq!(hash.get(&i).unwrap(), &i);
+    }
+    for i in len..(len * 2) {
+        assert!(hash.get(&i).is_none());
+    }
+
+    for _ in 0..(len / 2 + 1){
+        hash.rehash();
+    }
+    assert!(!hash.is_rehashing());
+
+    assert_eq!(hash.len(), len);
+
+    for i in 0..len {
+        assert_eq!(hash.get(&i).unwrap(), &i);
+    }
+    for i in len..(len * 2) {
+        assert!(hash.get(&i).is_none());
+    }
 }
