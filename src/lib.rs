@@ -43,7 +43,11 @@ impl<K, V> RehashingHashMap<K, V>
         if self.is1main { &self.hashmap2 } else { &self.hashmap1 }
     }
 
-    fn rehash(&mut self) {
+    fn get_mut_secondary(&mut self) -> &mut HashMap<K, V> {
+        if self.is1main { &mut self.hashmap2 } else { &mut self.hashmap1 }
+    }
+
+    pub fn rehash(&mut self) {
         if self.rehashing {
             if self.get_secondary().len() == 0 {
                 self.drop_secondary();
@@ -98,6 +102,7 @@ impl<K, V> RehashingHashMap<K, V>
 
     fn drop_secondary(&mut self) {
         self.rehashing = false;
+        assert_eq!(self.get_secondary().len(), 0);
         if self.is1main {
             self.hashmap2 = HashMap::new();
         } else {
@@ -143,6 +148,19 @@ impl<K, V> RehashingHashMap<K, V>
             }
         } else {
             self.get_main().get(k)
+        }
+    }
+
+    pub fn remove<Q: ?Sized>(&mut self, k: &Q) -> Option<V>
+        where K: Borrow<Q>, Q: Hash + Eq {
+        if self.rehashing {
+            self.rehash();
+            match self.get_mut_main().remove(k) {
+                Some(v) => Some(v),
+                None => self.get_mut_secondary().remove(k),
+            }
+        } else {
+            self.get_mut_main().remove(k)
         }
     }
 }
@@ -239,4 +257,40 @@ fn clear() {
     hash.assert_state();
 
     assert!(hash.capacity() >= 1000);
+}
+
+#[test]
+fn remove0() {
+    let mut hash = RehashingHashMap::new();
+    let key = 0;
+    let value = 2;
+    assert_eq!(hash.insert(key.clone(), value.clone()), None);
+    hash.shrink_to_fit();
+    assert!(hash.is_rehashing());
+    assert_eq!(hash.remove(&key).unwrap(), value);
+}
+
+#[test]
+fn remove1() {
+    let mut hash = RehashingHashMap::new();
+    let key = 0;
+    let value = 2;
+    assert_eq!(hash.insert(key.clone(), value.clone()), None);
+    hash.shrink_to_fit();
+    hash.rehash();
+    assert!(hash.is_rehashing());
+    assert_eq!(hash.remove(&key).unwrap(), value);
+}
+
+#[test]
+fn remove2() {
+    let mut hash = RehashingHashMap::new();
+    let key = 0;
+    let value = 2;
+    assert_eq!(hash.insert(key.clone(), value.clone()), None);
+    hash.shrink_to_fit();
+    hash.rehash();
+    hash.rehash();
+    assert!(!hash.is_rehashing());
+    assert_eq!(hash.remove(&key).unwrap(), value);
 }
