@@ -153,6 +153,11 @@ impl<K, V> RehashingHashMap<K, V>
         }
     }
 
+    pub fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool
+            where K: Borrow<Q>, Q: Hash + Eq {
+        self.get_main().contains_key(k) || self.get_secondary().contains_key(k)
+    }
+
     pub fn remove<Q: ?Sized>(&mut self, k: &Q) -> Option<V>
         where K: Borrow<Q>, Q: Hash + Eq {
         if self.rehashing {
@@ -536,4 +541,23 @@ fn entry() {
     for i in 0..(len + 3) {
         assert_eq!(hash.get(&i).unwrap().clone(), if i <= 2 { i + 1 } else { i });
     }
+}
+
+#[test]
+fn contains_key() {
+    let len = 100;
+    let mut hash = RehashingHashMap::with_capacity(len);
+    for i in 0..len {
+        hash.insert(i.clone(), i.clone());
+    }
+    hash.shrink_to_fit();
+    for _ in 0..(len / 2) {
+        hash.rehash();
+    }
+    assert!(hash.is_rehashing());
+
+    for i in 0..len {
+        assert!(hash.contains_key(&i));
+    }
+    assert!(!hash.contains_key(&(len + 1)));
 }
