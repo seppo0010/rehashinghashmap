@@ -1,6 +1,8 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::iter::Chain;
+use std::collections::hash_map;
 
 pub struct RehashingHashMap<K, V> {
     // NOTE: I tried to make an array of 2 elements, but run into borrowing problems
@@ -163,6 +165,22 @@ impl<K, V> RehashingHashMap<K, V>
             self.get_mut_main().remove(k)
         }
     }
+
+    pub fn iter(&self) -> Iter<K, V> {
+        Iter { inner: self.hashmap1.iter().chain(self.hashmap2.iter()) }
+    }
+}
+
+#[derive(Clone)]
+pub struct Iter<'a, K: 'a, V: 'a> {
+    inner: Chain<hash_map::Iter<'a, K, V>, hash_map::Iter<'a, K, V>>
+}
+
+impl<'a, K, V> Iterator for Iter<'a, K, V> {
+    type Item = (&'a K, &'a V);
+
+    #[inline] fn next(&mut self) -> Option<(&'a K, &'a V)> { self.inner.next() }
+    #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.inner.size_hint() }
 }
 
 #[test]
@@ -293,4 +311,25 @@ fn remove2() {
     hash.rehash();
     assert!(!hash.is_rehashing());
     assert_eq!(hash.remove(&key).unwrap(), value);
+}
+
+#[test]
+fn iterator() {
+    let len = 100;
+    let mut hash = RehashingHashMap::with_capacity(len);
+    let mut control = HashMap::new();
+    for i in 0..len {
+        hash.insert(i.clone(), i.clone());
+        control.insert(i.clone(), i.clone());
+    }
+    hash.shrink_to_fit();
+    for _ in 0..(len / 2) {
+        hash.rehash();
+    }
+    assert!(hash.is_rehashing());
+
+    for (_, i) in hash.iter() {
+        control.remove(&i);
+    }
+    assert!(control.is_empty());
 }
