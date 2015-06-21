@@ -262,6 +262,28 @@ impl<'a, K, Q: ?Sized, V> Index<&'a Q> for RehashingHashMap<K, V>
     }
 }
 
+impl<'a, K, V> IntoIterator for &'a RehashingHashMap<K, V>
+    where K: Eq + Hash + Clone
+{
+    type Item = (&'a K, &'a V);
+    type IntoIter = Iter<'a, K, V>;
+
+    fn into_iter(self) -> Iter<'a, K, V> {
+        self.iter()
+    }
+}
+
+impl<'a, K, V> IntoIterator for &'a mut RehashingHashMap<K, V>
+    where K: Eq + Hash + Clone
+{
+    type Item = (&'a K, &'a mut V);
+    type IntoIter = IterMut<'a, K, V>;
+
+    fn into_iter(mut self) -> IterMut<'a, K, V> {
+        self.iter_mut()
+    }
+}
+
 #[derive(Clone)]
 pub struct Iter<'a, K: 'a, V: 'a> {
     inner: Chain<hash_map::Iter<'a, K, V>, hash_map::Iter<'a, K, V>>,
@@ -689,4 +711,24 @@ fn index() {
         hash.rehash();
         assert_eq!(hash[&i], i);
     }
+}
+
+#[test]
+fn into_iter() {
+    let len = 100;
+    let mut hash = RehashingHashMap::new();
+    let mut control = HashMap::new();
+    for i in 0..len {
+        hash.insert(i.clone(), i.clone());
+        control.insert(i.clone(), i.clone());
+    }
+    hash.shrink_to_fit();
+    for _ in 0..(len / 2) {
+        hash.rehash();
+    }
+
+    for (k, v) in hash.into_iter() {
+        assert_eq!(&control.remove(&k).unwrap(), v);
+    }
+    assert_eq!(control.len(), 0);
 }
