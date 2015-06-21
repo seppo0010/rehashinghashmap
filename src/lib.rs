@@ -173,6 +173,15 @@ impl<K, V> RehashingHashMap<K, V>
         }
     }
 
+    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+        self.rehash();
+        let len = self.hashmap1.len() + self.hashmap2.len();
+        IterMut {
+            inner: self.hashmap1.iter_mut().chain(self.hashmap2.iter_mut()),
+            len: len,
+        }
+    }
+
     pub fn keys(&self) -> Keys<K, V> {
         Keys {
             inner: self.hashmap1.keys().chain(self.hashmap2.keys()),
@@ -202,6 +211,22 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
 }
 
 impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {
+    #[inline] fn len(&self) -> usize { self.len }
+}
+
+pub struct IterMut<'a, K: 'a, V: 'a> {
+    inner: Chain<hash_map::IterMut<'a, K, V>, hash_map::IterMut<'a, K, V>>,
+    len: usize,
+}
+
+impl<'a, K, V> Iterator for IterMut<'a, K, V> {
+    type Item = (&'a K, &'a mut V);
+
+    #[inline] fn next(&mut self) -> Option<(&'a K, &'a mut V)> { self.inner.next() }
+    #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.inner.size_hint() }
+}
+
+impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V> {
     #[inline] fn len(&self) -> usize { self.len }
 }
 
@@ -389,6 +414,34 @@ fn iterator() {
         control.remove(&i);
     }
     assert!(control.is_empty());
+}
+
+#[test]
+fn iter_mut() {
+    let len = 100;
+    let mut hash = RehashingHashMap::with_capacity(len);
+    let mut control = HashMap::new();
+    for i in 0..len {
+        hash.insert(i.clone(), i.clone());
+        control.insert(i.clone(), i.clone());
+    }
+    hash.shrink_to_fit();
+    for _ in 0..(len / 2) {
+        hash.rehash();
+    }
+    assert!(hash.is_rehashing());
+
+    assert_eq!(hash.iter_mut().len(), len);
+    for (_, i) in hash.iter_mut() {
+        control.remove(&i);
+        *i *= 2;
+    }
+    assert!(control.is_empty());
+
+    // make sure mutability was saved
+    for i in 0..len {
+        assert_eq!(hash.get(&i).unwrap().clone(), i * 2);
+    }
 }
 
 #[test]
