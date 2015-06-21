@@ -173,6 +173,10 @@ impl<K, V> RehashingHashMap<K, V>
     pub fn keys(&self) -> Keys<K, V> {
         Keys { inner: self.hashmap1.keys().chain(self.hashmap2.keys()) }
     }
+
+    pub fn values(&self) -> Values<K, V> {
+        Values { inner: self.hashmap1.values().chain(self.hashmap2.values()) }
+    }
 }
 
 #[derive(Clone)]
@@ -196,6 +200,18 @@ impl<'a, K, V> Iterator for Keys<'a, K, V> {
     type Item = &'a K;
 
     #[inline] fn next(&mut self) -> Option<&'a K> { self.inner.next() }
+    #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.inner.size_hint() }
+}
+
+#[derive(Clone)]
+pub struct Values<'a, K: 'a, V: 'a> {
+    inner: Chain<hash_map::Values<'a, K, V>, hash_map::Values<'a, K, V>>
+}
+
+impl<'a, K, V> Iterator for Values<'a, K, V> {
+    type Item = &'a V;
+
+    #[inline] fn next(&mut self) -> Option<&'a V> { self.inner.next() }
     #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.inner.size_hint() }
 }
 
@@ -366,6 +382,27 @@ fn keys() {
     assert!(hash.is_rehashing());
 
     for i in hash.keys() {
+        control.remove(&i);
+    }
+    assert!(control.is_empty());
+}
+
+#[test]
+fn values() {
+    let len = 100;
+    let mut hash = RehashingHashMap::with_capacity(len);
+    let mut control = HashMap::new();
+    for i in 0..len {
+        hash.insert(i.clone(), i.clone());
+        control.insert(i.clone(), i.clone());
+    }
+    hash.shrink_to_fit();
+    for _ in 0..(len / 2) {
+        hash.rehash();
+    }
+    assert!(hash.is_rehashing());
+
+    for i in hash.values() {
         control.remove(&i);
     }
     assert!(control.is_empty());
