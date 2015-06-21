@@ -166,6 +166,16 @@ impl<K, V> RehashingHashMap<K, V>
         }
     }
 
+    pub fn entry(&mut self, key: K) -> hash_map::Entry<K, V> {
+        self.rehash();
+        if self.rehashing {
+            if self.get_secondary().contains_key(&key) {
+                return self.get_mut_secondary().entry(key);
+            }
+        }
+        self.get_mut_main().entry(key)
+    }
+
     pub fn iter(&self) -> Iter<K, V> {
         Iter {
             inner: self.hashmap1.iter().chain(self.hashmap2.iter()),
@@ -486,4 +496,44 @@ fn values() {
         control.remove(&i);
     }
     assert!(control.is_empty());
+}
+
+#[test]
+fn entry() {
+    let len = 100;
+    let mut hash = RehashingHashMap::with_capacity(len);
+    for i in 0..len {
+        hash.insert(i.clone(), i.clone());
+    }
+
+    // modifying main
+    {
+        let v = hash.entry(0).or_insert(100); // updating
+        *v += 1;
+    }
+    hash.entry(len).or_insert(len); // inserting
+
+    hash.shrink_to_fit();
+    // modifying secondary
+    assert!(hash.is_rehashing());
+    {
+        let v = hash.entry(1).or_insert(100); // updating
+        *v += 1;
+    }
+    hash.entry(len + 1).or_insert(len + 1); // inserting
+
+    while hash.is_rehashing() {
+        hash.rehash();
+    }
+
+    // modifying the new main
+    {
+        let v = hash.entry(2).or_insert(100); // updating
+        *v += 1;
+    }
+    hash.entry(len + 2).or_insert(len + 2); // inserting
+
+    for i in 0..(len + 3) {
+        assert_eq!(hash.get(&i).unwrap().clone(), if i <= 2 { i + 1 } else { i });
+    }
 }
