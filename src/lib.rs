@@ -1,10 +1,11 @@
 use std::borrow::Borrow;
+use std::collections::hash_map;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::iter::Chain;
-use std::collections::hash_map;
+use std::ops::Index;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RehashingHashMap<K: Eq + Hash, V> {
     // NOTE: I tried to make an array of 2 elements, but run into borrowing problems
     hashmap1: HashMap<K, V>,
@@ -246,6 +247,18 @@ impl<K, V> PartialEq for RehashingHashMap<K, V> where K: Eq + Hash + Clone, V: P
             }
         }
         return true;
+    }
+}
+
+impl<'a, K, Q: ?Sized, V> Index<&'a Q> for RehashingHashMap<K, V>
+    where K: Eq + Hash + Clone + Borrow<Q>,
+    Q: Eq + Hash,
+{
+    type Output = V;
+
+    #[inline]
+    fn index(&self, index: &Q) -> &V {
+        self.get(index).expect("no entry found for key")
     }
 }
 
@@ -662,4 +675,18 @@ fn eq() {
     hash2.shrink_to_fit();
     hash2.insert(101, 101);
     assert!(hash1 != hash2);
+}
+
+#[test]
+fn index() {
+    let mut hash = RehashingHashMap::new();
+
+    for i in 0..100 {
+        hash.insert(i.clone(), i.clone());
+    }
+    hash.shrink_to_fit();
+    for i in 0..100 {
+        hash.rehash();
+        assert_eq!(hash[&i], i);
+    }
 }
