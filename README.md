@@ -1,5 +1,7 @@
 # Rehashing Hash Map
 
+[![Build Status](https://travis-ci.org/seppo0010/rehashinghashmap.svg?branch=master)](https://travis-ci.org/seppo0010/rehashinghashmap)
+
 A HashMap wrapper that shrinks to fit in small steps.
 
 ## Why?
