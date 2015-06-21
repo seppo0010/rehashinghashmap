@@ -167,21 +167,31 @@ impl<K, V> RehashingHashMap<K, V>
     }
 
     pub fn iter(&self) -> Iter<K, V> {
-        Iter { inner: self.hashmap1.iter().chain(self.hashmap2.iter()) }
+        Iter {
+            inner: self.hashmap1.iter().chain(self.hashmap2.iter()),
+            len: self.hashmap1.len() + self.hashmap2.len(),
+        }
     }
 
     pub fn keys(&self) -> Keys<K, V> {
-        Keys { inner: self.hashmap1.keys().chain(self.hashmap2.keys()) }
+        Keys {
+            inner: self.hashmap1.keys().chain(self.hashmap2.keys()),
+            len: self.hashmap1.len() + self.hashmap2.len(),
+        }
     }
 
     pub fn values(&self) -> Values<K, V> {
-        Values { inner: self.hashmap1.values().chain(self.hashmap2.values()) }
+        Values {
+            inner: self.hashmap1.values().chain(self.hashmap2.values()),
+            len: self.hashmap1.len() + self.hashmap2.len(),
+        }
     }
 }
 
 #[derive(Clone)]
 pub struct Iter<'a, K: 'a, V: 'a> {
-    inner: Chain<hash_map::Iter<'a, K, V>, hash_map::Iter<'a, K, V>>
+    inner: Chain<hash_map::Iter<'a, K, V>, hash_map::Iter<'a, K, V>>,
+    len: usize,
 }
 
 impl<'a, K, V> Iterator for Iter<'a, K, V> {
@@ -191,9 +201,14 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
     #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.inner.size_hint() }
 }
 
+impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {
+    #[inline] fn len(&self) -> usize { self.len }
+}
+
 #[derive(Clone)]
 pub struct Keys<'a, K: 'a, V: 'a> {
-    inner: Chain<hash_map::Keys<'a, K, V>, hash_map::Keys<'a, K, V>>
+    inner: Chain<hash_map::Keys<'a, K, V>, hash_map::Keys<'a, K, V>>,
+    len: usize,
 }
 
 impl<'a, K, V> Iterator for Keys<'a, K, V> {
@@ -203,9 +218,14 @@ impl<'a, K, V> Iterator for Keys<'a, K, V> {
     #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.inner.size_hint() }
 }
 
+impl<'a, K, V> ExactSizeIterator for Keys<'a, K, V> {
+    #[inline] fn len(&self) -> usize { self.len }
+}
+
 #[derive(Clone)]
 pub struct Values<'a, K: 'a, V: 'a> {
-    inner: Chain<hash_map::Values<'a, K, V>, hash_map::Values<'a, K, V>>
+    inner: Chain<hash_map::Values<'a, K, V>, hash_map::Values<'a, K, V>>,
+    len: usize,
 }
 
 impl<'a, K, V> Iterator for Values<'a, K, V> {
@@ -213,6 +233,10 @@ impl<'a, K, V> Iterator for Values<'a, K, V> {
 
     #[inline] fn next(&mut self) -> Option<&'a V> { self.inner.next() }
     #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.inner.size_hint() }
+}
+
+impl<'a, K, V> ExactSizeIterator for Values<'a, K, V> {
+    #[inline] fn len(&self) -> usize { self.len }
 }
 
 #[test]
@@ -360,6 +384,7 @@ fn iterator() {
     }
     assert!(hash.is_rehashing());
 
+    assert_eq!(hash.iter().len(), len);
     for (_, i) in hash.iter() {
         control.remove(&i);
     }
@@ -381,6 +406,7 @@ fn keys() {
     }
     assert!(hash.is_rehashing());
 
+    assert_eq!(hash.keys().len(), len);
     for i in hash.keys() {
         control.remove(&i);
     }
@@ -402,6 +428,7 @@ fn values() {
     }
     assert!(hash.is_rehashing());
 
+    assert_eq!(hash.values().len(), len);
     for i in hash.values() {
         control.remove(&i);
     }
