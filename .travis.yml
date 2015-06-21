@@ -1,0 +1,11 @@
+language: rust
+sudo: false
+rust:
+  - stable
+  - nightly
+
+script:
+  - cargo test --verbose
+
+notifications:
+  email: false
