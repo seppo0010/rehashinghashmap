@@ -153,6 +153,20 @@ impl<K, V> RehashingHashMap<K, V>
         }
     }
 
+    pub fn get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
+            where K: Borrow<Q>, Q: Hash + Eq {
+        if self.rehashing {
+            self.rehash();
+            if self.get_main().contains_key(k) {
+                self.get_mut_main().get_mut(k)
+            } else {
+                self.get_mut_secondary().get_mut(k)
+            }
+        } else {
+            self.get_mut_main().get_mut(k)
+        }
+    }
+
     pub fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool
             where K: Borrow<Q>, Q: Hash + Eq {
         self.get_main().contains_key(k) || self.get_secondary().contains_key(k)
@@ -560,4 +574,49 @@ fn contains_key() {
         assert!(hash.contains_key(&i));
     }
     assert!(!hash.contains_key(&(len + 1)));
+}
+
+#[test]
+fn get_mut0() {
+    let mut hash = RehashingHashMap::new();
+    let value = 1;
+    {
+        hash.insert(value.clone(), value.clone());
+        hash.shrink_to_fit();
+        assert!(hash.is_rehashing());
+        let val = hash.get_mut(&value).unwrap();
+        *val += 1;
+    }
+    assert_eq!(hash.get(&value).unwrap().clone(), 2);
+}
+
+#[test]
+fn get_mut1() {
+    let mut hash = RehashingHashMap::new();
+    let value = 1;
+    {
+        hash.insert(value.clone(), value.clone());
+        hash.shrink_to_fit();
+        hash.rehash();
+        assert!(hash.is_rehashing());
+        let val = hash.get_mut(&value).unwrap();
+        *val += 1;
+    }
+    assert_eq!(hash.get(&value).unwrap().clone(), 2);
+}
+
+#[test]
+fn get_mut2() {
+    let mut hash = RehashingHashMap::new();
+    let value = 1;
+    {
+        hash.insert(value.clone(), value.clone());
+        hash.shrink_to_fit();
+        hash.rehash();
+        hash.rehash();
+        assert!(!hash.is_rehashing());
+        let val = hash.get_mut(&value).unwrap();
+        *val += 1;
+    }
+    assert_eq!(hash.get(&value).unwrap().clone(), 2);
 }
