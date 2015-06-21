@@ -4,7 +4,8 @@ use std::hash::Hash;
 use std::iter::Chain;
 use std::collections::hash_map;
 
-pub struct RehashingHashMap<K, V> {
+#[derive(Debug)]
+pub struct RehashingHashMap<K: Eq + Hash, V> {
     // NOTE: I tried to make an array of 2 elements, but run into borrowing problems
     hashmap1: HashMap<K, V>,
     hashmap2: HashMap<K, V>,
@@ -223,6 +224,28 @@ impl<K, V> RehashingHashMap<K, V>
             inner: self.hashmap1.values().chain(self.hashmap2.values()),
             len: self.hashmap1.len() + self.hashmap2.len(),
         }
+    }
+}
+
+impl<K, V> PartialEq for RehashingHashMap<K, V> where K: Eq + Hash + Clone, V: PartialEq {
+    fn eq(&self, other: &RehashingHashMap<K, V>) -> bool {
+        // we cannot rehash because `self` and `other` are not immutables!
+        // so we should try to see if they are the same manually if they are
+        // rehashing
+        if !self.is_rehashing() && !other.is_rehashing() {
+            return self.get_main().eq(other.get_main());
+        }
+
+        if self.len() != other.len() {
+            return false;
+        }
+
+        for (k, v) in self.iter() {
+            if other.get(k) != Some(v) {
+                return false;
+            }
+        }
+        return true;
     }
 }
 
@@ -619,4 +642,24 @@ fn get_mut2() {
         *val += 1;
     }
     assert_eq!(hash.get(&value).unwrap().clone(), 2);
+}
+
+#[test]
+fn eq() {
+    let mut hash1 = RehashingHashMap::new();
+    let mut hash2 = RehashingHashMap::new();
+
+    for i in 0..100 {
+        hash1.insert(i.clone(), i.clone());
+        hash2.insert(i.clone(), i.clone());
+    }
+    hash1.shrink_to_fit();
+    hash2.shrink_to_fit();
+    while hash2.is_rehashing() {
+        assert_eq!(hash1, hash2);
+        hash2.rehash();
+    }
+    hash2.shrink_to_fit();
+    hash2.insert(101, 101);
+    assert!(hash1 != hash2);
 }
