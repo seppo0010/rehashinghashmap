@@ -3,6 +3,7 @@ use std::collections::hash_map;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::iter::Chain;
+use std::iter::FromIterator;
 use std::ops::Index;
 
 #[derive(Debug, Default)]
@@ -281,6 +282,28 @@ impl<'a, K, V> IntoIterator for &'a mut RehashingHashMap<K, V>
 
     fn into_iter(mut self) -> IterMut<'a, K, V> {
         self.iter_mut()
+    }
+}
+
+impl<K, V> FromIterator<(K, V)> for RehashingHashMap<K, V>
+    where K: Eq + Hash + Clone
+{
+    fn from_iter<T: IntoIterator<Item=(K, V)>>(iterable: T) -> RehashingHashMap<K, V> {
+        let iter = iterable.into_iter();
+        let lower = iter.size_hint().0;
+        let mut map = RehashingHashMap::with_capacity(lower);
+        map.extend(iter);
+        map
+    }
+}
+
+impl<K, V> Extend<(K, V)> for RehashingHashMap<K, V>
+    where K: Eq + Hash + Clone
+{
+    fn extend<T: IntoIterator<Item=(K, V)>>(&mut self, iter: T) {
+        for (k, v) in iter {
+            self.insert(k, v);
+        }
     }
 }
 
@@ -731,4 +754,17 @@ fn into_iter() {
         assert_eq!(&control.remove(&k).unwrap(), v);
     }
     assert_eq!(control.len(), 0);
+}
+
+#[test]
+fn extend() {
+    let mut hash = RehashingHashMap::new();
+    hash.extend(vec![(1, 1), (2, 2), (3, 3)]);
+    assert_eq!(hash.len(), 3);
+}
+
+#[test]
+fn from_iter() {
+    let hash = RehashingHashMap::from_iter(vec![(1, 1), (2, 2), (3, 3)]);
+    assert_eq!(hash.len(), 3);
 }
