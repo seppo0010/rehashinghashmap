@@ -5,6 +5,9 @@ use std::hash::Hash;
 use std::iter::Chain;
 use std::iter::FromIterator;
 use std::ops::Index;
+use std::mem;
+use std::sync::mpsc::channel;
+use std::thread;
 
 #[derive(Debug, Default)]
 pub struct RehashingHashMap<K: Eq + Hash, V> {
@@ -108,11 +111,14 @@ impl<K, V> RehashingHashMap<K, V>
     fn drop_secondary(&mut self) {
         self.rehashing = false;
         assert_eq!(self.get_secondary().len(), 0);
-        if self.is1main {
-            self.hashmap2 = HashMap::new();
+        let h = if self.is1main {
+            mem::replace(&mut self.hashmap2, HashMap::new());
         } else {
-            self.hashmap1 = HashMap::new();
-        }
+            mem::replace(&mut self.hashmap1, HashMap::new());
+        };
+        let (tx, rx) = channel();
+        thread::spawn(move || drop(rx.recv().unwrap()));
+        tx.send(h).unwrap();
     }
 
     fn assert_state(&self) {
