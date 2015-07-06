@@ -76,7 +76,7 @@ impl<K, V> RehashingHashMap<K, V>
     }
 
     pub fn capacity(&self) -> usize {
-        self.get_main().capacity()
+        self.get_main().capacity() + self.get_secondary().len()
     }
 
     pub fn reserve(&mut self, additional: usize) {
